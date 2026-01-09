@@ -1,7 +1,8 @@
 #include "motor.h"
 
 // ===== コンストラクタ =====
-Motor::Motor(int speed) { speed_ = speed; }
+Motor::Motor(int speed)
+    : speed_(speed), minDuty_(MIN_DUTY), maxDuty_(MAX_DUTY) {}
 
 // ===== 内部関数 =====
 void Motor::setMotorSpeed(int pinF, int pinB, int speedValue) {
@@ -12,8 +13,8 @@ void Motor::setMotorSpeed(int pinF, int pinB, int speedValue) {
   }
 
   int absSpeed = constrain(abs(speedValue), 0, 255);
-  int duty = MIN_DUTY + (absSpeed * (MAX_DUTY - MIN_DUTY)) / 255;
-  duty = constrain(duty, MIN_DUTY, MAX_DUTY);
+  int duty = minDuty_ + (absSpeed * (maxDuty_ - minDuty_)) / 255;
+  duty = constrain(duty, minDuty_, maxDuty_);
 
   if (speedValue > 0) {
     ledcWrite(pinF, duty);
@@ -75,6 +76,14 @@ void Motor::turnRight() {
 }
 
 void Motor::setSpeed(int speed) { speed_ = constrain(speed, 0, 255); }
+
+void Motor::setDutyRange(int minDuty, int maxDuty) {
+  minDuty_ = constrain(minDuty, 0, 255);
+  maxDuty_ = constrain(maxDuty, 0, 255);
+  if (maxDuty_ < minDuty_) {
+    maxDuty_ = minDuty_;
+  }
+}
 
 void Motor::drive(int leftSpeed, int rightSpeed) {
   setMotorSpeed(Motor_L1_F_PIN, Motor_L1_B_PIN, -leftSpeed);

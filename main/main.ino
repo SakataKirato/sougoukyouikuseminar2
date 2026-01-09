@@ -33,6 +33,13 @@ float lineKp = LINE_KP;
 float lineKi = LINE_KI;
 float lineKd = LINE_KD;
 float lineIntegralLimit = LINE_INTEGRAL_LIMIT;
+int lineSensorWeights[8] = {LINE_SENSOR_WEIGHTS[0], LINE_SENSOR_WEIGHTS[1],
+                            LINE_SENSOR_WEIGHTS[2], LINE_SENSOR_WEIGHTS[3],
+                            LINE_SENSOR_WEIGHTS[4], LINE_SENSOR_WEIGHTS[5],
+                            LINE_SENSOR_WEIGHTS[6], LINE_SENSOR_WEIGHTS[7]};
+unsigned long lineControlIntervalMs = LINE_CONTROL_INTERVAL_MS;
+int motorMinDuty = MIN_DUTY;
+int motorMaxDuty = MAX_DUTY;
 WebServer server(80);
 
 /* =========================
@@ -89,6 +96,7 @@ void setup() {
 
   setupWiFi();
   setupWebServer();
+  motor.setDutyRange(motorMinDuty, motorMaxDuty);
 
   // 初期停止
   motor.stop();
@@ -232,7 +240,7 @@ int calculateLineError(uint8_t pattern, int previousError) {
       continue;
     }
     if (pattern & (1 << i)) {
-      weightedSum += LINE_SENSOR_WEIGHTS[i];
+      weightedSum += lineSensorWeights[i];
       activeCount++;
     }
   }
@@ -254,11 +262,11 @@ void resetLineTraceController() {
 void lineTraceControl() {
   unsigned long now = millis();
   if (lastLineUpdate != 0 &&
-      (now - lastLineUpdate) < LINE_CONTROL_INTERVAL_MS) {
+      (now - lastLineUpdate) < lineControlIntervalMs) {
     return;
   }
 
-  float dt = (lastLineUpdate == 0) ? (LINE_CONTROL_INTERVAL_MS / 1000.0f)
+  float dt = (lastLineUpdate == 0) ? (lineControlIntervalMs / 1000.0f)
                                    : (now - lastLineUpdate) / 1000.0f;
   lastLineUpdate = now;
 
@@ -359,9 +367,25 @@ void handleUpdateRequest() {
   if (server.hasArg("integralLimit")) {
     lineIntegralLimit = server.arg("integralLimit").toFloat();
   }
+  if (server.hasArg("minDuty")) {
+    motorMinDuty = server.arg("minDuty").toInt();
+  }
+  if (server.hasArg("maxDuty")) {
+    motorMaxDuty = server.arg("maxDuty").toInt();
+  }
+  if (server.hasArg("controlIntervalMs")) {
+    lineControlIntervalMs = server.arg("controlIntervalMs").toInt();
+  }
+  for (int i = 0; i < 8; i++) {
+    String argName = "weight" + String(i);
+    if (server.hasArg(argName)) {
+      lineSensorWeights[i] = server.arg(argName).toInt();
+    }
+  }
 
   applyLineParameterBounds();
   motor.setSpeed(lineBaseSpeed);
+  motor.setDutyRange(motorMinDuty, motorMaxDuty);
 
   server.sendHeader("Location", "/");
   server.send(303);
@@ -383,6 +407,12 @@ String buildControlPage() {
   page += "<label>MAX SPEED<input type='number' name='maxSpeed' min='0' "
           "max='255' value='" +
           String(lineMaxSpeed) + "'></label>";
+  page += "<label>MIN DUTY<input type='number' name='minDuty' min='0' "
+          "max='255' value='" +
+          String(motorMinDuty) + "'></label>";
+  page += "<label>MAX DUTY<input type='number' name='maxDuty' min='0' "
+          "max='255' value='" +
+          String(motorMaxDuty) + "'></label>";
   page += "<label>Kp<input type='number' step='0.1' name='kp' value='" +
           String(lineKp, 2) + "'></label>";
   page += "<label>Ki<input type='number' step='0.1' name='ki' value='" +
@@ -393,6 +423,16 @@ String buildControlPage() {
       "<label>Integral Limit<input type='number' step='1' name='integralLimit' "
       "value='" +
       String(lineIntegralLimit, 2) + "'></label>";
+  page += "<label>Control Interval (ms)<input type='number' min='1' max='1000' "
+          "step='1' name='controlIntervalMs' value='" +
+          String(lineControlIntervalMs) + "'></label>";
+  page += "<h3>Line Sensor Weights</h3>";
+  for (int i = 0; i < 8; i++) {
+    page += "<label>Weight " + String(i) +
+            "<input type='number' min='-10' max='10' step='1' name='weight" +
+            String(i) + "' value='" + String(lineSensorWeights[i]) +
+            "'></label>";
+  }
   page += "<button type='submit'>更新</button></form>";
   page += "<p>現在のPID出力は実行中のライン制御に即座に反映されます。</p>";
   page += "</body></html>";
@@ -413,5 +453,14 @@ void applyLineParameterBounds() {
   }
   if (lineIntegralLimit < 0.0f) {
     lineIntegralLimit = 0.0f;
+  }
+  motorMinDuty = constrain(motorMinDuty, 0, 255);
+  motorMaxDuty = constrain(motorMaxDuty, 0, 255);
+  if (motorMaxDuty < motorMinDuty) {
+    motorMaxDuty = motorMinDuty;
+  }
+  lineControlIntervalMs = constrain(lineControlIntervalMs, 1UL, 1000UL);
+  for (int i = 0; i < 8; i++) {
+    lineSensorWeights[i] = constrain(lineSensorWeights[i], -10, 10);
   }
 }

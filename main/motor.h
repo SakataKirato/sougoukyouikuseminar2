@@ -21,9 +21,12 @@ public:
 
   // 速度変更
   void setSpeed(int speed);
+  void setDutyRange(int minDuty, int maxDuty);
 
 private:
   int speed_;
+  int minDuty_;
+  int maxDuty_;
 
   // 内部用：1モータ制御
   void setMotorSpeed(int pinF, int pinB, int speedValue);
