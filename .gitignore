@@ -1,0 +1,4 @@
+.vscode/
+venv/
+log*
+data_for_test
