@@ -12,7 +12,7 @@ ROI_TOP_RATIO = 0.4      # 上部カット率（0.0-1.0）
 ROI_BOTTOM_RATIO = 0.9   # 下部カット率（0.0-1.0）
 
 # 角度スムージング設定
-ANGLE_SMOOTH_WINDOW = 5  # 移動平均のウィンドウサイズ（大きいほど滑らか）
+ANGLE_SMOOTH_WINDOW = 10  # 移動平均のウィンドウサイズ（大きいほど滑らか）
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("", PORT))
