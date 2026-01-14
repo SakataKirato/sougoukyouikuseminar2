@@ -1,14 +1,24 @@
 import socket
 import numpy as np
 import cv2
+from collections import deque
 
 PORT = 5005
 W, H = 160, 120
+
+# ROI設定（ライン検出範囲）
+# カーブ対応: 狭めると直近の進路に敏感、広めると安定
+ROI_TOP_RATIO = 0.4      # 上部カット率（0.0-1.0）
+ROI_BOTTOM_RATIO = 0.9   # 下部カット率（0.0-1.0）
+
+# 角度スムージング設定
+ANGLE_SMOOTH_WINDOW = 5  # 移動平均のウィンドウサイズ（大きいほど滑らか）
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("", PORT))
 
 frames = {}
+angle_history = deque(maxlen=ANGLE_SMOOTH_WINDOW)  # 角度履歴バッファ
 
 print("UDP receiving...")
 
@@ -62,9 +72,16 @@ while True:
         bw_clean = cv2.morphologyEx(bw_clean, cv2.MORPH_CLOSE, kernel)
 
         # =========================
-        # 5. 輪郭検出（黒線）
+        # 4.5. ROI設定（上下端を除外）
         # =========================
-        bw_inv = cv2.bitwise_not(bw_clean)
+        roi_top = int(H * ROI_TOP_RATIO)
+        roi_bottom = int(H * ROI_BOTTOM_RATIO)
+        bw_roi = bw_clean[roi_top:roi_bottom, :]
+
+        # =========================
+        # 5. 輪郭検出（黒線）- ROI内のみ
+        # =========================
+        bw_inv = cv2.bitwise_not(bw_roi)
 
         contours, _ = cv2.findContours(
             bw_inv,
@@ -85,7 +102,23 @@ while True:
             if valid_contours:
                 # 面積最大の輪郭 = ライン
                 line_contour = max(valid_contours, key=cv2.contourArea)
-                cv2.drawContours(vis, [line_contour], -1, (0, 0, 255), 2)
+                
+                # ROI座標をオリジナル画像座標に変換
+                line_contour_adjusted = line_contour.copy()
+                line_contour_adjusted[:, :, 1] += roi_top
+                
+                cv2.drawContours(vis, [line_contour_adjusted], -1, (0, 0, 255), 2)
+                
+                # 直線フィッティングで傾きを計算
+                [vx, vy, x, y] = cv2.fitLine(line_contour_adjusted, cv2.DIST_L2, 0, 0.01, 0.01)
+                
+                # 傾き（ラジアン → 度）
+                angle_rad = np.arctan2(vy, vx)
+                angle_deg_raw = np.degrees(angle_rad)[0]
+                
+                # 角度スムージング（移動平均）
+                angle_history.append(angle_deg_raw)
+                angle_deg = np.mean(angle_history)
                 
                 # 重心を計算して表示
                 M = cv2.moments(line_contour)
@@ -93,6 +126,19 @@ while True:
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
                     cv2.circle(vis, (cx, cy), 3, (0, 255, 0), -1)
+                    
+                    # 傾きを表示（スムージング済み + 生データ）
+                    cv2.putText(vis, f"Angle: {angle_deg:.1f} deg (raw: {angle_deg_raw:.1f})", 
+                                (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+                    
+                    # フィッティングした直線を描画（デバッグ用）
+                    lefty = int((-x * vy / vx) + y)
+                    righty = int(((W - x) * vy / vx) + y)
+                    cv2.line(vis, (W-1, righty), (0, lefty), (255, 0, 0), 1)
+
+        # ROI境界を表示（デバッグ用）
+        cv2.line(vis, (0, roi_top), (W-1, roi_top), (255, 255, 0), 1)
+        cv2.line(vis, (0, roi_bottom), (W-1, roi_bottom), (255, 255, 0), 1)
 
         # =========================
         # 7. 表示
