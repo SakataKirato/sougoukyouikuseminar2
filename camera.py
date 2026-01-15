@@ -8,11 +8,18 @@ W, H = 160, 120
 
 # ROI設定（ライン検出範囲）
 # カーブ対応: 狭めると直近の進路に敏感、広めると安定
-ROI_TOP_RATIO = 0.4      # 上部カット率（0.0-1.0）
+ROI_TOP_RATIO = 0.4     # 上部カット率（0.0-1.0）
 ROI_BOTTOM_RATIO = 0.9   # 下部カット率（0.0-1.0）
 
 # 角度スムージング設定
 ANGLE_SMOOTH_WINDOW = 10  # 移動平均のウィンドウサイズ（大きいほど滑らか）
+
+# メカナムホイール制御パラメータ
+BASE_SPEED = 100     # 基本前進速度 (0-255)
+Kp_x = 0.5          # 横方向位置補正ゲイン
+Kp_angle = 0.5      # 角度補正ゲイン
+MAX_SPEED = 255     # モーター最大速度
+MIN_SPEED = -255    # モーター最小速度
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("", PORT))
@@ -113,15 +120,22 @@ while True:
                 [vx, vy, x, y] = cv2.fitLine(line_contour_adjusted, cv2.DIST_L2, 0, 0.01, 0.01)
                 
                 # 傾き（ラジアン → 度）
-                angle_rad = np.arctan2(vy, vx)
-                angle_deg_raw = np.degrees(angle_rad)[0]
+                # 画像座標系はY軸が下向きなので、vyを反転して垂直上向きを0度とする
+                angle_rad = np.arctan2(-vy, vx)  # vyを反転
+                angle_deg_raw = np.degrees(angle_rad)[0] - 90.0
                 
                 # 角度スムージング（移動平均）
                 angle_history.append(angle_deg_raw)
                 angle_deg = np.mean(angle_history)
                 
-                # 重心を計算して表示
-                M = cv2.moments(line_contour)
+                # 角度を-90〜+90度に正規化
+                if angle_deg > 90:
+                    angle_deg -= 180
+                elif angle_deg < -90:
+                    angle_deg += 180
+                
+                # 重心を計算して表示（元の画像座標系で計算）
+                M = cv2.moments(line_contour_adjusted)
                 if M["m00"] != 0:
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
@@ -135,6 +149,50 @@ while True:
                     lefty = int((-x * vy / vx) + y)
                     righty = int(((W - x) * vy / vx) + y)
                     cv2.line(vis, (W-1, righty), (0, lefty), (255, 0, 0), 1)
+                    
+                    # =========================
+                    # メカナムホイール速度計算
+                    # =========================
+                    # 誤差計算
+                    error_angle = angle_deg - 0.0    # 角度誤差（0度が目標）
+                    error_x = cx - (W / 2)           # 位置誤差（画面中心が目標）
+                    
+                    # 比例制御で補正量を計算
+                    correction_x = Kp_x * error_x
+                    correction_angle = Kp_angle * error_angle
+                    
+                    # 速度成分
+                    vx_speed = -correction_x        # 横移動（左右補正）
+                    vy_speed = BASE_SPEED          # 前進
+                    omega = -correction_angle      # 回転（角度補正）
+                    
+                    # メカナムホイール逆運動学
+                    FL = vy_speed - vx_speed - omega  # 前左
+                    FR = vy_speed + vx_speed + omega  # 前右
+                    BL = vy_speed + vx_speed - omega  # 後左
+                    BR = vy_speed - vx_speed + omega  # 後右
+                    
+                    # 速度の正規化（範囲制限）
+                    speeds = [FL, FR, BL, BR]
+                    max_abs = max(abs(s) for s in speeds)
+                    
+                    if max_abs > MAX_SPEED:
+                        scale = MAX_SPEED / max_abs
+                        FL *= scale
+                        FR *= scale
+                        BL *= scale
+                        BR *= scale
+                    
+                    # 範囲制限
+                    FL = int(max(MIN_SPEED, min(MAX_SPEED, FL)))
+                    FR = int(max(MIN_SPEED, min(MAX_SPEED, FR)))
+                    BL = int(max(MIN_SPEED, min(MAX_SPEED, BL)))
+                    BR = int(max(MIN_SPEED, min(MAX_SPEED, BR)))
+                    
+                    # デバッグ出力
+                    print(f"Angle:{angle_deg:+6.1f}° ErrA:{error_angle:+6.1f}° | "
+                          f"Pos:({cx:3d},{cy:3d}) ErrX:{error_x:+4.0f} | "
+                          f"Motors: FL={FL:+4d} FR={FR:+4d} BL={BL:+4d} BR={BR:+4d}")
 
         # ROI境界を表示（デバッグ用）
         cv2.line(vis, (0, roi_top), (W-1, roi_top), (255, 255, 0), 1)
