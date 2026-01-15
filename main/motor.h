@@ -18,6 +18,7 @@ public:
   void turnLeft();
   void turnRight();
   void drive(int leftSpeed, int rightSpeed);
+  void driveMecanum(int FL, int FR, int BL, int backRight);  // メカナムホイール個別制御
 
   // 速度変更
   void setSpeed(int speed);

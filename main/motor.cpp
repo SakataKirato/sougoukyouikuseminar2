@@ -91,3 +91,12 @@ void Motor::drive(int leftSpeed, int rightSpeed) {
   setMotorSpeed(Motor_R1_F_PIN, Motor_R1_B_PIN, -rightSpeed);
   setMotorSpeed(Motor_R2_F_PIN, Motor_R2_B_PIN, -rightSpeed);
 }
+
+void Motor::driveMecanum(int FL, int FR, int BL, int backRight) {
+  // メカナムホイール個別制御
+  // FL: 前左, FR: 前右, BL: 後左, backRight: 後右
+  setMotorSpeed(Motor_L1_F_PIN, Motor_L1_B_PIN, -FL);
+  setMotorSpeed(Motor_R1_F_PIN, Motor_R1_B_PIN, -FR);
+  setMotorSpeed(Motor_L2_F_PIN, Motor_L2_B_PIN, -BL);
+  setMotorSpeed(Motor_R2_F_PIN, Motor_R2_B_PIN, -backRight);
+}

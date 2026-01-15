@@ -90,6 +90,7 @@ void setup() {
   Serial.println("6/R: TURN RIGHT");
   Serial.println("7/t: LINE TRACE");
   Serial.println("8/p: PRINT LINE SENSORS");
+  Serial.println("9/c: CAMERA CONTROL (receive from Python)");
   Serial.print("Connect to Wi-Fi SSID: ");
   Serial.print(WIFI_AP_SSID);
   Serial.println(" for GUI");
@@ -166,6 +167,12 @@ void loop() {
       printLineSensorValues();
       return;
 
+    case '9':
+    case 'c':
+    case 'C':
+      currentState = CAMERA_CONTROL;
+      break;
+
     default:
       Serial.println("Invalid command");
       return;
@@ -213,6 +220,19 @@ void loop() {
 
   case LINE_TRACE:
     lineTraceControl();
+    break;
+
+  case CAMERA_CONTROL:
+    // カメラからのシリアルデータを受信（8バイト: FL, FR, BL, backRight）
+    if (Serial.available() >= 8) {
+      int16_t FL, FR, BL, backRight;
+      Serial.readBytes((char*)&FL, 2);
+      Serial.readBytes((char*)&FR, 2);
+      Serial.readBytes((char*)&BL, 2);
+      Serial.readBytes((char*)&backRight, 2);
+      
+      motor.driveMecanum(FL, FR, BL, backRight);
+    }
     break;
   }
 }

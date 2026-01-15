@@ -57,7 +57,8 @@ enum RobotState {
   RIGHT,
   TURN_LEFT,
   TURN_RIGHT,
-  LINE_TRACE
+  LINE_TRACE,
+  CAMERA_CONTROL  // カメラベースのライントレース
 };
 
 /* =========================

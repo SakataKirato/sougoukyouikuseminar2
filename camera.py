@@ -2,6 +2,8 @@ import socket
 import numpy as np
 import cv2
 from collections import deque
+import struct
+import serial
 
 PORT = 5005
 W, H = 160, 120
@@ -21,11 +23,27 @@ Kp_angle = 0.5      # 角度補正ゲイン
 MAX_SPEED = 255     # モーター最大速度
 MIN_SPEED = -255    # モーター最小速度
 
+# シリアル通信設定
+SERIAL_PORT = '/dev/ttyUSB1'  # シリアルポート（環境に応じて変更）
+SERIAL_BAUD = 115200          # ボーレート
+SERIAL_ENABLE = True        # シリアル送信を有効化（Trueで送信開始）
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("", PORT))
 
 frames = {}
 angle_history = deque(maxlen=ANGLE_SMOOTH_WINDOW)  # 角度履歴バッファ
+
+# シリアルポート初期化
+ser = None
+if SERIAL_ENABLE:
+    try:
+        ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=0.1)
+        print(f"シリアルポート {SERIAL_PORT} を開きました (ボーレート: {SERIAL_BAUD})")
+    except Exception as e:
+        print(f"シリアルポートのオープンに失敗: {e}")
+        print("シリアル送信は無効化されます")
+        SERIAL_ENABLE = False
 
 print("UDP receiving...")
 
@@ -190,9 +208,19 @@ while True:
                     BR = int(max(MIN_SPEED, min(MAX_SPEED, BR)))
                     
                     # デバッグ出力
-                    print(f"Angle:{angle_deg:+6.1f}° ErrA:{error_angle:+6.1f}° | "
+                    serial_status = "[SENT]" if SERIAL_ENABLE and ser else "[NO SERIAL]"
+                    print(f"{serial_status} Angle:{angle_deg:+6.1f}° ErrA:{error_angle:+6.1f}° | "
                           f"Pos:({cx:3d},{cy:3d}) ErrX:{error_x:+4.0f} | "
                           f"Motors: FL={FL:+4d} FR={FR:+4d} BL={BL:+4d} BR={BR:+4d}")
+                    
+                    # シリアル送信
+                    if SERIAL_ENABLE and ser:
+                        try:
+                            # 4つのshort（2バイト整数）としてパック
+                            data = struct.pack('hhhh', FL, FR, BL, BR)
+                            ser.write(data)
+                        except Exception as e:
+                            print(f"シリアル送信エラー: {e}")
 
         # ROI境界を表示（デバッグ用）
         cv2.line(vis, (0, roi_top), (W-1, roi_top), (255, 255, 0), 1)
