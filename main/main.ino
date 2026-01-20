@@ -111,7 +111,8 @@ void loop() {
   server.handleClient();
 
   // ===== コマンド受付 =====
-  if (Serial.available() > 0) {
+  // CAMERA_CONTROLモード時はバイナリデータを受信するため、コマンド処理をスキップ
+  if (currentState != CAMERA_CONTROL && Serial.available() > 0) {
     char command = Serial.read();
 
     // 改行は無視
@@ -171,6 +172,7 @@ void loop() {
     case 'c':
     case 'C':
       currentState = CAMERA_CONTROL;
+      Serial.println("Switched to CAMERA_CONTROL mode");
       break;
 
     default:
@@ -230,6 +232,16 @@ void loop() {
       Serial.readBytes((char*)&FR, 2);
       Serial.readBytes((char*)&BL, 2);
       Serial.readBytes((char*)&backRight, 2);
+      
+      // デバッグ出力
+      Serial.print("RX: FL=");
+      Serial.print(FL);
+      Serial.print(" FR=");
+      Serial.print(FR);
+      Serial.print(" BL=");
+      Serial.print(BL);
+      Serial.print(" BR=");
+      Serial.println(backRight);
       
       motor.driveMecanum(FL, FR, BL, backRight);
     }

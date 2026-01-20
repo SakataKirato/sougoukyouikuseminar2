@@ -44,7 +44,7 @@
                 "ARDUINO_VARIANT=\"esp32\"",
                 "ARDUINO_PARTITION_default",
                 "ARDUINO_HOST_OS=\"linux\"",
-                "ARDUINO_FQBN=\"esp32:esp32:esp32wrover:PartitionScheme=default,FlashMode=qio,FlashFreq=80,UploadSpeed=921600,DebugLevel=none,EraseFlash=none\"",
+                "ARDUINO_FQBN=\"esp32:esp32:esp32wrover:PartitionScheme=default,FlashMode=qio,FlashFreq=80,UploadSpeed=921600,DebugLevel=none,EraseFlash=all\"",
                 "ESP32=ESP32",
                 "CORE_DEBUG_LEVEL=0",
                 "BOARD_HAS_PSRAM",
